@@ -13,6 +13,7 @@ export function validateSettings(s: Settings): string | null {
     const loopback = u.hostname === 'localhost' || u.hostname === '[::1]' || /^127\.(\d{1,3}\.){2}\d{1,3}$/.test(u.hostname);
     if (!loopback || !['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) return 'Use a loopback HTTP(S) endpoint without credentials or a path.';
   } catch { return 'Enter a valid local endpoint URL.'; }
+  if (s.provider !== undefined && !['ollama','llamacpp'].includes(s.provider)) return 'Unknown inference provider.';
   if (typeof s.charts !== 'boolean') return 'Chart preference must be a boolean.';
   if (!Number.isInteger(s.interval) || s.interval < 500 || s.interval > 10000) return 'Sampling interval must be 500–10000 ms.';
   if (!Number.isInteger(s.history) || s.history < 30 || s.history > 600) return 'History must be 30–600 samples.';

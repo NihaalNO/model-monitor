@@ -2,7 +2,9 @@
 
 A local desktop dashboard for Windows 11 and Linux, built with Tauri 2, Rust, React and TypeScript. Hardware samples are **system-wide**. Final token and prompt-processing rates come only from benchmarks initiated in this app.
 
-**Status: Phase 2 saved-run comparison is implemented.** Frontend build, TypeScript checking, linting and tests have passed in the updated development environment. Rust tools and dependencies are now available; native build/runtime verification is ongoing. The Phase 1 report below is a historical record of the earlier blocked environment. See [PHASE_02_REPORT.md](PHASE_02_REPORT.md) for current results.
+**Status: Phase 03 import-first profiling and controlled experiments are implemented.** See [PHASE_03_REPORT.md](PHASE_03_REPORT.md) for acceptance and actual validation, including unverified live capture and deferred Linux runtime testing. Existing Phase 01/02 workflows are preserved.
+
+Use **Experiments** for fixed short/long workloads and context scaling with warmups, repetitions, raw API results and statistics. Use **Profiler** to import documented Nsight Compute long-form raw CSV, inspect kernels/memory counters and browse saved reports without rerunning inference. Deep profiling does not automatically attach to processes or launch tools. Profiler installation, capture permissions and hardware support are optional and never assumed. See [requirements and limitations](PROFILING_LIMITATIONS.md) and [metric definitions](PROFILING_METRICS.md).
 
 ## Features
 
@@ -11,7 +13,7 @@ A local desktop dashboard for Windows 11 and Linux, built with Tauri 2, Rust, Re
 - Windows display-adapter inventory through WMI; Linux display-adapter vendor and PCI identification through DRM sysfs. Linux PCI IDs are not marketed GPU model names.
 - Local Ollama version, installed models and loaded models; available quantization, parameter size and GPU residency metadata.
 - Controlled streaming benchmark with independent prefill and decode rates, API durations, token counts and cancellation.
-- Overview, Hardware, Models, Benchmark and Settings pages, dark responsive layout, six ECharts charts.
+- Overview, Hardware, Models, Benchmark, Experiments, Profiler and Settings pages in the existing responsive light theme.
 - Bounded histories: 120 hardware samples by default (30–600 configurable), last 20 completed throughput results, and up to 600 concurrent hardware samples for the latest benchmark.
 - Metric classification, source and missing-data explanations. No random or simulated performance data.
 - Loopback-only endpoints, redirects disabled, no shell or filesystem plugins, no telemetry uploads.
@@ -114,3 +116,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [METRICS.md](METRICS.md) and [PHASE_01_R
 ## Phase 02 additions
 
 Successful benchmarks now retain finalized results and hardware captures locally (last 20 runs). The Benchmark page provides a comparison table, JSON export and deletion. Prompts and output remain ephemeral. This supersedes Phase 1 documentation stating that all metric histories reset on restart. See PHASE_02_REPORT.md.
+
+## Phase 02 continuation (28 October 2026)
+
+The owner has verified the original 13 Windows workflows; this continuation preserves them and uses automated regression checks rather than asking for repeated confirmation.
+
+Added native SQLite history with idempotent migration (legacy browser data retained), CSV export, process sorting, per-core/swap and optional expanded GPU/PCIe counters, llama.cpp provider selection and conservative diagnostics. History pages load 200 records without a database retention cap. JSON/CSV exports read the entire native history. Browser preview retains the old bounded fallback.
+
+Select Ollama or llama.cpp in Settings and configure the matching loopback endpoint (typically 11434 or 8080). llama.cpp must already be running with a loaded model. Its native completion endpoint uses raw prompts; timings are normalized only where actually supplied. No models or servers are installed automatically.
+
+SQLite uses the app data directory and system runtime: winsqlite3.dll on Windows, libsqlite3.so.0 on Linux (install the distribution SQLite runtime if absent). Migration errors leave legacy history untouched. Prompts/output are not stored in SQLite. Preserve the database when upgrading. See PHASE_02_GAP_AUDIT.md, DESIGN_SYSTEM.md and PHASE_02_REPORT.md for remaining validation limits. Earlier README statements about only browser storage or a dark theme are historical; the current design is light.

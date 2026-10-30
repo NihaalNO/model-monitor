@@ -1,5 +1,7 @@
 # Architecture
 
+Phase 03 adds isolated analysis workspaces and schema v2 summary/detail storage. See [PHASE_03_PROFILING_ARCHITECTURE.md](PHASE_03_PROFILING_ARCHITECTURE.md) for current boundaries; older schema-v1 descriptions below are historical. New profiling never enters ordinary sampling.
+
 ## Boundaries
 
 The React WebView renders native command responses. It has no filesystem, shell, HTTP-plugin or GPU access. The Rust backend reads system counters and contacts a validated loopback Ollama endpoint. Browser preview disables native actions and shows unavailable metrics.
@@ -71,3 +73,14 @@ Each Metric carries value (nullable), unit, classification, source and reason (n
 - [WMI connection](https://docs.rs/wmi/latest/wmi/struct.WMIConnection.html)
 - [Ollama generation API](https://docs.ollama.com/api/generate)
 
+
+## Phase 02 continuation
+
+- `storage.rs`: dynamically loads system SQLite (winsqlite3.dll on Windows, libsqlite3.so.0 on Linux) via libloading. Each connection remains within one blocking worker; no SQLite handle crosses threads. Schema version is checked before mutation. Migration holds BEGIN IMMEDIATE, imports validated legacy records with INSERT OR IGNORE, and records a marker only with the successful transaction. The legacy browser copy is retained. Database deletion does not remove that marker, preventing re-import after deletion. SQL string values use quote escaping and CString rejects embedded NUL. Future schema versions are rejected.
+- `benchmark_store` command: app-owned data directory, fixed filename benchmarks.sqlite3; no caller-supplied DB path. Single-run saves, 200-record pages, unlimited database retention, whole-history export. Disk failures surface to the UI. Local browser preview retains the legacy bounded fallback. Raw prompt is excluded; generated output is stripped before DB save.
+- `providers.rs`: typed provider selection defaults to Ollama for backwards compatibility. llama.cpp uses /health, /v1/models and /completion. NDJSON/SSE frames share final-metric normalization and cancellation. Server-side load/total timings remain unavailable where not exposed. No model download or service installation occurs.
+- `monitor.rs` adds reused sysinfo process refresh, per-core and swap counters and independent optional NVML counters. Process CPU semantics differ from aggregate CPU; GPU attribution is not fabricated. All polling stays in the existing serialized worker path.
+- Saved comparison context stores backend, quantization when reported, prompt character length/digest, output cap and hardware identity; no raw prompt. Unknown context-window/cache state always produces an observational-comparison caveat.
+- `diagnostics.ts` is pure and conservative; it describes sampled evidence and possible causes without declaring a utilization sample to be a definitive bottleneck.
+
+Existing sections describing browser-only persistence and missing process refresh are historical Phase 1 descriptions, superseded by this section.

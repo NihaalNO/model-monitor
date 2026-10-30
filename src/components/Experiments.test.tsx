@@ -1,0 +1,36 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { BenchmarkResult } from '../types';
+vi.mock('../services', () => ({ desktop:true, cancelBenchmark:vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../profiling', async importOriginal => ({ ...await importOriginal<typeof import('../profiling')>(), capabilities: vi.fn().mockResolvedValue([]), analysisStore:vi.fn().mockResolvedValue([]), trial:vi.fn() }));
+vi.mock('./Chart', () => ({ Chart:() => <div>Measured chart</div> }));
+import { trial, analysisStore } from '../profiling';
+import { cancelBenchmark } from '../services';
+import { ProfilingWorkspace } from './ProfilingWorkspace';
+const metric = {value:4,unit:'tok/s',classification:'measured' as const,source:'test fixture',reason:null};
+const result: BenchmarkResult = {model:'fixture',output:'not persisted',generated_tokens:metric,prompt_tokens:metric,decode_rate:metric,prefill_rate:metric,decode_duration:metric,prefill_duration:metric,total_duration:metric,load_duration:metric};
+const settings = {endpoint:'http://127.0.0.1:11434',interval:1000,history:120,charts:true};
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(trial).mockResolvedValue(result); });
+afterEach(cleanup);
+it('executes warmups and measured repetitions sequentially and saves raw trials', async () => {
+  render(<ProfilingWorkspace mode="experiment" model="fixture" settings={settings} busy={false} onBusy={() => {}}/>);
+  fireEvent.click(screen.getByText('Run experiment'));
+  await waitFor(() => expect(screen.getByText(/Selected experiment · Completed/)).toBeTruthy());
+  expect(trial).toHaveBeenCalledTimes(4);
+  const saved = vi.mocked(analysisStore).mock.calls.find(c => c[0] === 'save')?.[1];
+  expect(saved?.trials?.map(t => t.warmup)).toEqual([true,false,false,false]);
+  expect(saved?.trials?.every(t => t.result.output === '')).toBe(true);
+  expect(screen.getAllByText(/n=3/)).toHaveLength(2);
+});
+it('cancels an admitted trial and prevents subsequent trial admission', async () => {
+  let rejectTrial: (e: Error) => void = () => {};
+  vi.mocked(trial).mockImplementationOnce(() => new Promise((_,reject) => { rejectTrial=reject; }));
+  render(<ProfilingWorkspace mode="experiment" model="fixture" settings={settings} busy={false} onBusy={() => {}}/>);
+  fireEvent.click(screen.getByText('Run experiment'));
+  await waitFor(() => expect(trial).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByText('Cancel experiment'));
+  rejectTrial(new Error('Benchmark cancelled'));
+  await waitFor(() => expect(screen.getByText(/Selected experiment · Cancelled/)).toBeTruthy());
+  expect(cancelBenchmark).toHaveBeenCalled();
+  expect(trial).toHaveBeenCalledTimes(1);
+});

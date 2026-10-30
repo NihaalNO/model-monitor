@@ -22,7 +22,28 @@ pub async fn run(
     prompt: String,
     channel: Channel<Progress>,
     cancel: CancellationToken,
+    provider: crate::providers::Provider,
 ) -> Result<BenchmarkResult, String> {
+    run_configured(
+        client, endpoint, model, prompt, channel, cancel, provider, None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn run_configured(
+    client: &reqwest::Client,
+    endpoint: &str,
+    model: String,
+    prompt: String,
+    channel: Channel<Progress>,
+    cancel: CancellationToken,
+    provider: crate::providers::Provider,
+    options: Option<crate::providers::WorkloadOptions>,
+) -> Result<BenchmarkResult, String> {
+    if let Some(ref options) = options {
+        options.validate(provider)?;
+    }
     let base = ollama::endpoint(endpoint)?;
     if model.trim().is_empty() || prompt.trim().is_empty() {
         return Err("Select a model and enter a prompt".into());
@@ -31,20 +52,22 @@ pub async fn run(
         return Err("Prompt must be at most 128 KiB".into());
     }
     // Verify installation before inference, so this app never requests an implicit model pull.
-    let models: ollama::ModelList = tokio::select! {
-        biased;
-        _ = cancel.cancelled() => return Err("Benchmark cancelled".into()),
-        result = ollama::get_json(client,&base,"api/tags") => result?,
-    };
-    if !models.models.iter().any(|m| m.name == model) {
-        return Err("Selected model is no longer installed".into());
+    if provider == crate::providers::Provider::Ollama {
+        let models: ollama::ModelList = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Err("Benchmark cancelled".into()),
+            result = ollama::get_json(client,&base,"api/tags") => result?,
+        };
+        if !models.models.iter().any(|m| m.name == model) {
+            return Err("Selected model is no longer installed".into());
+        }
     }
     let response = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err("Benchmark cancelled".into()),
-        result = client.post(base.join("api/generate").map_err(|e|e.to_string())?)
+        result = client.post(base.join(provider.route()).map_err(|e|e.to_string())?)
             .timeout(Duration::from_secs(1800))
-            .json(&serde_json::json!({"model":model,"prompt":prompt,"stream":true,"options":{"num_predict":512}})).send() =>
+            .json(&options.as_ref().map(|o|o.request(provider,&model,&prompt)).unwrap_or_else(||provider.request(&model,&prompt))).send() =>
             result.map_err(|e|e.to_string())?.error_for_status().map_err(|e|e.to_string())?,
     };
     let mut stream = response.bytes_stream();
@@ -64,6 +87,20 @@ pub async fn run(
                     if let Some(done) = process_line(&line, &channel, &mut output)? {
                         let mut result = BenchmarkResult::from_chunk(model, done);
                         result.output = output;
+                        if provider == crate::providers::Provider::Llamacpp {
+                            for m in [
+                                &mut result.generated_tokens,
+                                &mut result.prompt_tokens,
+                                &mut result.decode_rate,
+                                &mut result.prefill_rate,
+                                &mut result.decode_duration,
+                                &mut result.prefill_duration,
+                                &mut result.total_duration,
+                                &mut result.load_duration,
+                            ] {
+                                m.source = m.source.replace("Ollama", "llama.cpp");
+                            }
+                        }
                         return Ok(result);
                     }
                 }
@@ -76,6 +113,20 @@ pub async fn run(
                 if let Some(done) = process_line(&pending, &channel, &mut output)? {
                     let mut result = BenchmarkResult::from_chunk(model, done);
                     result.output = output;
+                    if provider == crate::providers::Provider::Llamacpp {
+                        for m in [
+                            &mut result.generated_tokens,
+                            &mut result.prompt_tokens,
+                            &mut result.decode_rate,
+                            &mut result.prefill_rate,
+                            &mut result.decode_duration,
+                            &mut result.prefill_duration,
+                            &mut result.total_duration,
+                            &mut result.load_duration,
+                        ] {
+                            m.source = m.source.replace("Ollama", "llama.cpp");
+                        }
+                    }
                     return Ok(result);
                 }
                 return Err("Ollama stream ended without final performance metrics".into());
@@ -94,8 +145,9 @@ fn process_line(
     if line.iter().all(u8::is_ascii_whitespace) {
         return Ok(None);
     }
-    let chunk: GenerateChunk =
-        serde_json::from_slice(line).map_err(|e| format!("Invalid Ollama stream: {e}"))?;
+    let Some(chunk) = crate::providers::parse(line)? else {
+        return Ok(None);
+    };
     if let Some(error) = &chunk.error {
         return Err(error.clone());
     }
@@ -134,6 +186,7 @@ mod tests {
             "hello".into(),
             channel,
             token,
+            crate::providers::Provider::Ollama,
         )
         .await;
         assert!(matches!(result, Err(e) if e == "Benchmark cancelled"));

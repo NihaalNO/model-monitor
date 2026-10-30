@@ -1,11 +1,11 @@
 use crate::metrics::Metric;
 use nvml_wrapper::{
-    enum_wrappers::device::{Clock, TemperatureSensor},
+    enum_wrappers::device::{Clock, PcieUtilCounter, TemperatureSensor},
     Nvml,
 };
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
-use sysinfo::System;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
 #[derive(Serialize)]
 pub struct Gpu {
@@ -18,6 +18,20 @@ pub struct Gpu {
     pub temperature: Metric,
     pub power: Metric,
     pub core_clock: Metric,
+    pub memory_clock: Metric,
+    pub power_limit: Metric,
+    pub memory_controller: Metric,
+    pub pcie_tx: Metric,
+    pub pcie_rx: Metric,
+}
+#[derive(Serialize)]
+pub struct InferenceProcess {
+    pub pid: u32,
+    pub name: String,
+    pub cpu_percent: f32,
+    pub ram_bytes: u64,
+    pub status: String,
+    pub gpu_memory: Metric,
 }
 #[derive(Serialize)]
 pub struct Snapshot {
@@ -30,6 +44,10 @@ pub struct Snapshot {
     pub ram_used: Metric,
     pub ram_available: Metric,
     pub ram_total: Metric,
+    pub swap_used: Metric,
+    pub swap_total: Metric,
+    pub per_core: Vec<Metric>,
+    pub processes: Vec<InferenceProcess>,
     pub gpus: Vec<Gpu>,
     pub gpu_status: Option<String>,
     pub adapters: Vec<crate::platform::Adapter>,
@@ -51,6 +69,11 @@ impl Monitor {
     pub fn sample(&mut self) -> Snapshot {
         self.system.refresh_cpu_usage();
         self.system.refresh_memory();
+        self.system.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing().with_cpu().with_memory(),
+        );
         let cpu = if self.primed {
             Metric::measured(
                 self.system.global_cpu_usage() as f64,
@@ -110,6 +133,27 @@ impl Monitor {
                                         d.power_usage().map(|v| v as f64 / 1000.0),
                                         "W",
                                     ),
+                                    pcie_tx: nv_metric(
+                                        d.pcie_throughput(PcieUtilCounter::Send).map(|v| v as f64),
+                                        "KB/s",
+                                    ),
+                                    pcie_rx: nv_metric(
+                                        d.pcie_throughput(PcieUtilCounter::Receive)
+                                            .map(|v| v as f64),
+                                        "KB/s",
+                                    ),
+                                    memory_clock: nv_metric(
+                                        d.clock_info(Clock::Memory).map(|v| v as f64),
+                                        "MHz",
+                                    ),
+                                    power_limit: nv_metric(
+                                        d.power_management_limit().map(|v| v as f64 / 1000.0),
+                                        "W",
+                                    ),
+                                    memory_controller: nv_metric(
+                                        d.utilization_rates().map(|v| v.memory as f64),
+                                        "%",
+                                    ),
                                     core_clock: nv_metric(
                                         d.clock_info(Clock::Graphics).map(|v| v as f64),
                                         "MHz",
@@ -135,7 +179,7 @@ impl Monitor {
                 .map(|c| c.brand().to_string())
                 .unwrap_or_else(|| "Unknown CPU".into()),
             logical_cpus: self.system.cpus().len(),
-            cpu,
+            cpu: cpu.clone(),
             ram_used: Metric::measured(
                 self.system.used_memory() as f64,
                 "bytes",
@@ -151,6 +195,62 @@ impl Monitor {
                 "bytes",
                 "sysinfo · system-wide",
             ),
+            swap_used: Metric::measured(
+                self.system.used_swap() as f64,
+                "bytes",
+                "sysinfo system-wide",
+            ),
+            swap_total: Metric::measured(
+                self.system.total_swap() as f64,
+                "bytes",
+                "sysinfo system-wide",
+            ),
+            per_core: self
+                .system
+                .cpus()
+                .iter()
+                .map(|c| {
+                    if cpu.value.is_some() {
+                        Metric::measured(c.cpu_usage() as f64, "%", "sysinfo logical CPU")
+                    } else {
+                        Metric::unavailable("%", "sysinfo", "Waiting for CPU interval")
+                    }
+                })
+                .collect(),
+            processes: self
+                .system
+                .processes()
+                .iter()
+                .filter_map(|(pid, p)| {
+                    let name = p.name().to_string_lossy().into_owned();
+                    let lower = name.to_lowercase();
+                    if ![
+                        "ollama",
+                        "llama-server",
+                        "llama-cli",
+                        "llama.cpp",
+                        "lm studio",
+                        "lm-studio",
+                    ]
+                    .iter()
+                    .any(|n| lower.contains(n))
+                    {
+                        return None;
+                    }
+                    Some(InferenceProcess {
+                        pid: pid.as_u32(),
+                        name,
+                        cpu_percent: p.cpu_usage(),
+                        ram_bytes: p.memory(),
+                        status: format!("{:?}", p.status()),
+                        gpu_memory: Metric::unavailable(
+                            "bytes",
+                            "NVML process accounting",
+                            "Not reliably attributable across platforms and WDDM",
+                        ),
+                    })
+                })
+                .collect(),
             gpus,
             gpu_status,
             adapters: self.inventory.as_ref().cloned().unwrap_or_default(),
@@ -167,6 +267,12 @@ fn nv_metric(result: Result<f64, nvml_wrapper::error::NvmlError>, unit: &str) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unsupported_counter_remains_unavailable() {
+        let m = nv_metric(Err(nvml_wrapper::error::NvmlError::NotSupported), "KB/s");
+        assert!(m.value.is_none());
+        assert!(m.reason.is_some());
+    }
     #[test]
     fn absent_nvml_keeps_cpu_and_ram_available() {
         let mut m = Monitor::new();

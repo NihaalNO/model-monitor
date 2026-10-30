@@ -1,5 +1,7 @@
 # Measurement reference
 
+Phase 03 counters, experiment statistics, timing scopes and estimates are specified in [PROFILING_METRICS.md](PROFILING_METRICS.md). The older unavailable profiler rows below describe Phase 01; imported Nsight counters now provide only the explicitly collected subset, with original names/units and nulls for missing values.
+
 Hardware measurements are system-wide and include other applications. Software measurements below are available only for app-controlled Ollama benchmarks. An unavailable value is null and always has a reason; it is never replaced by zero.
 
 | Metric | Definition / calculation | Unit | Source | Classification / limitation |
@@ -41,3 +43,19 @@ All rates use nanosecond API durations, with count × 1,000,000,000 / duration. 
 
 No passive token-speed estimates are presented. Historical software charts contain only completed benchmark results. Failed/cancelled requests retain partial output but do not create a completed throughput result.
 
+
+## Phase 02 continuation counters
+
+| Counter | Units / source | Meaning and limits |
+| --- | --- | --- |
+| GPU memory clock | MHz / NVML | Current clock; not bandwidth |
+| GPU power limit | W / NVML milliwatts converted | Reported enforced-management limit; proximity does not prove throttling |
+| Memory controller utilization | % / NVML utilization memory field | Time device memory is being read/written; not fraction of theoretical GB/s |
+| PCIe transmit / receive | KB/s / NVML | Device-level sampled PCIe transfers; not model-weight traffic or DRAM bandwidth |
+| Swap used / total | bytes / sysinfo | Allocation/capacity; not active paging I/O |
+| Logical CPU utilization | % / sysinfo | One value per logical CPU; initial interval unavailable |
+| Inference process CPU | % / sysinfo | Across logical CPUs, may exceed 100%; discovery by supported executable names |
+| Inference process RAM | bytes / sysinfo | Resident process memory; not all model weights or shared mappings |
+| Process GPU memory | unavailable | Reliable cross-platform attribution is not implemented |
+
+llama.cpp timings use prompt_n/predicted_n and prompt_ms/predicted_ms from /completion. Milliseconds normalize to nanoseconds before shared formulas. Missing total and load timings remain unavailable and sources are labelled llama.cpp. No cross-backend equality of timing scopes is assumed.

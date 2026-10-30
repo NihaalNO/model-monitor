@@ -34,3 +34,11 @@ tmp/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Native profiler captures and machine-local analysis output
+*.ncu-rep
+*.nsight-cuprof-report
+*.nsys-rep
+*.qdrep
+*.nvvp
+profiling-captures/
