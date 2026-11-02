@@ -1,10 +1,22 @@
 # Local AI Performance Monitor
 
+## Finding your way around
+
+- **Home** — AI service and loaded-model status, available essential resources, and explicitly historical benchmark speed.
+- **Performance** — select CPU, memory, a detected GPU, GPU memory or swap for a focused graph. Expand process, counter and diagnostic details when needed.
+- **Models** — installed/loaded models and backend connection details.
+- **Tests** — Quick Benchmark and Advanced Experiments. You can browse other pages while a test runs and return using its activity link.
+- **Analysis** — profiler overview/import, kernels, memory, attention and profiler sessions.
+- **History** — saved benchmark runs/comparisons, experiments and profiling reports, with existing deletion/export controls.
+- **Settings** — local connection, monitoring and chart preferences.
+
+The interface keeps its Windows light theme and Segoe system typography. Native measurements remain desktop-only; browser preview says when connection/hardware has not been checked. Generation speed is never presented as live external inference activity. See [UI simplification report](UI_SIMPLIFICATION_REPORT.md) for visual evidence and validation limits.
+
 A local desktop dashboard for Windows 11 and Linux, built with Tauri 2, Rust, React and TypeScript. Hardware samples are **system-wide**. Final token and prompt-processing rates come only from benchmarks initiated in this app.
 
 **Status: Phase 03 import-first profiling and controlled experiments are implemented.** See [PHASE_03_REPORT.md](PHASE_03_REPORT.md) for acceptance and actual validation, including unverified live capture and deferred Linux runtime testing. Existing Phase 01/02 workflows are preserved.
 
-Use **Experiments** for fixed short/long workloads and context scaling with warmups, repetitions, raw API results and statistics. Use **Profiler** to import documented Nsight Compute long-form raw CSV, inspect kernels/memory counters and browse saved reports without rerunning inference. Deep profiling does not automatically attach to processes or launch tools. Profiler installation, capture permissions and hardware support are optional and never assumed. See [requirements and limitations](PROFILING_LIMITATIONS.md) and [metric definitions](PROFILING_METRICS.md).
+Use **Tests → Advanced Experiments** for fixed short/long workloads and context scaling with warmups, repetitions, raw API results and statistics. Use **Analysis → Overview** to import documented Nsight Compute long-form raw CSV, inspect kernels/memory counters and browse saved reports without rerunning inference. Deep profiling does not automatically attach to processes or launch tools. Profiler installation, capture permissions and hardware support are optional and never assumed. See [requirements and limitations](PROFILING_LIMITATIONS.md) and [metric definitions](PROFILING_METRICS.md).
 
 ## Features
 
@@ -13,12 +25,12 @@ Use **Experiments** for fixed short/long workloads and context scaling with warm
 - Windows display-adapter inventory through WMI; Linux display-adapter vendor and PCI identification through DRM sysfs. Linux PCI IDs are not marketed GPU model names.
 - Local Ollama version, installed models and loaded models; available quantization, parameter size and GPU residency metadata.
 - Controlled streaming benchmark with independent prefill and decode rates, API durations, token counts and cancellation.
-- Overview, Hardware, Models, Benchmark, Experiments, Profiler and Settings pages in the existing responsive light theme.
+- Home, Performance, Models, Tests, Analysis, History and Settings pages in the existing responsive light theme.
 - Bounded histories: 120 hardware samples by default (30–600 configurable), last 20 completed throughput results, and up to 600 concurrent hardware samples for the latest benchmark.
 - Metric classification, source and missing-data explanations. No random or simulated performance data.
 - Loopback-only endpoints, redirects disabled, no shell or filesystem plugins, no telemetry uploads.
 
-The first NVML GPU is shown on Overview; Hardware shows every NVML device. Adapter inventory can include integrated and virtual display devices.
+The first NVML GPU is summarized on Home; Performance includes every detected NVML device. Adapter inventory can include integrated and virtual display devices.
 
 ## Stack
 
@@ -74,7 +86,7 @@ npm run tauri dev
 
 If Ollama is installed but not running, start it separately with `ollama serve`. If it is already running in the tray, do not start a second server. The default endpoint is `http://127.0.0.1:11434`.
 
-The app will not download models. Select an existing installed model, enter a prompt on Benchmark and run. Generation is capped at 512 output tokens; Ollama's model/context defaults otherwise apply.
+The app will not download models. Select an existing installed model, enter a prompt in Tests → Quick Benchmark and run. Generation is capped at 512 output tokens; Ollama's model/context defaults otherwise apply.
 
 `npm run dev` opens only a browser preview on `http://127.0.0.1:1420`. Browser mode explicitly marks native monitoring and inference unavailable; it is not a fallback hardware collector.
 

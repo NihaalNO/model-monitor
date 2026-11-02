@@ -1,5 +1,11 @@
 # Architecture
 
+## UI information architecture (November 2026)
+
+`App.tsx` retains sampling, model discovery, settings, quick-benchmark streaming and saved-run state. `navigation.ts` validates hash destinations and maps previous page names into Home/Performance/Models/Tests/Analysis/History/Settings. `SectionTabs` supplies secondary navigation and keyboard shortcuts. Home separates service availability, loaded-model metadata and app-owned activity; finalized throughput carries a completion timestamp and historical label. Performance holds resource selection and presents one active graph with independently available counters.
+
+Two persistent `ProfilingWorkspace` instances retain experiment and profile lifecycles. Their externally selected views are shared between Tests, Analysis and History. Navigation hides views instead of destroying operation state; it never invokes cancellation. A global operation link returns to the owner. History changes reuse the existing storage/export interfaces. No native command or schema change accompanies this UI restructuring. See [UI_SIMPLIFICATION_REPORT.md](UI_SIMPLIFICATION_REPORT.md).
+
 Phase 03 adds isolated analysis workspaces and schema v2 summary/detail storage. See [PHASE_03_PROFILING_ARCHITECTURE.md](PHASE_03_PROFILING_ARCHITECTURE.md) for current boundaries; older schema-v1 descriptions below are historical. New profiling never enters ordinary sampling.
 
 ## Boundaries

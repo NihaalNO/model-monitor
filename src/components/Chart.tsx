@@ -19,8 +19,8 @@ export const Chart = memo(function Chart({ title, unit, series, category = false
   useEffect(() => {
     chart.current?.setOption({
       animation: false, textStyle: { color: '#586c84', fontFamily: 'system-ui' },
-      tooltip: { trigger: 'axis', valueFormatter: (value: unknown) => typeof value === 'number' ? value.toFixed(2) + ' ' + unit : 'Unavailable' }, legend: { show: series.length > 1, bottom:0, textStyle:{color:'#586c84'} }, grid: { left: 48, right: 20, top: 16, bottom: 30 },
-      xAxis: { type: category ? 'category' : numeric ? 'value' : 'time', min: numeric ? 0 : undefined, axisLabel: { color: '#586c84' }, axisLine: { lineStyle: { color: '#dce3ed' } } },
+      tooltip: { trigger: 'axis', valueFormatter: (value: unknown) => typeof value === 'number' ? value.toFixed(2) + ' ' + unit : 'Unavailable' }, legend: { show: series.length > 1, bottom:2, textStyle:{color:'#586c84'} }, grid: { left: 48, right: 20, top: 16, bottom: series.length > 1 ? 52 : 32 },
+      xAxis: { type: category ? 'category' : numeric ? 'value' : 'time', min: numeric ? 0 : undefined, axisLabel: { color: '#586c84', hideOverlap: true }, axisLine: { lineStyle: { color: '#dce3ed' } } },
       yAxis: { type: 'value', min: 0, ...(unit === '%' ? { max: 100 } : {}), splitLine: { lineStyle: { color: '#e7edf5' } }, axisLabel: { color: '#586c84' } },
       series: series.map(s => ({ name: s.name, type: category ? 'bar' : 'line', data: numeric ? [...s.values].sort((a,b) => Number(a[0])-Number(b[0])) : s.values, showSymbol: numeric, connectNulls: false, lineStyle: { width: 2 }, itemStyle: { color: s.color }, areaStyle: { opacity: .06 }, barMaxWidth: 32 })),
     }, true);
